@@ -10,7 +10,7 @@ do
 
     read username
 
-    if [[ $players =~ $username ]]; then echo "Error: User already exists"; else usernamegood=true; fi
+    if grep -qow "$username\b" <<<"$players"; then echo "Error: User already exists"; else usernamegood=true; fi
 done
 
 sudo useradd $username -g players
