@@ -71,8 +71,7 @@ static void read_conf(struct daemon_config* config, char* conf_file) {
 static int create_socket_and_listen(struct daemon_config* config) {
   int sfd = socket(PF_INET,SOCK_STREAM,0);
 
-  int flags = fcntl(sfd, F_GETFL, 0);
-  flags = flags | O_NONBLOCK;
+  int flags = fcntl(sfd, F_GETFL, 0) | O_NONBLOCK;
   fcntl(sfd, F_SETFL, flags);
 
   int enable = 1;
