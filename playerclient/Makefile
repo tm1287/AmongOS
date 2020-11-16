@@ -1,4 +1,4 @@
-all: gamemanagerd.c
-	gcc -g -Wall -o gamemanagerd gamemanagerd.c
+all: playerclient.c
+	gcc -g -Wall -o playerclient playerclient.c
 clean:
-	$(RM) gamemanagerd
+	$(RM) playerclient
