@@ -27,4 +27,4 @@ root    ALL=(ALL:ALL) ALL
 # See sudoers(5) for more information on "#include" directives:
 
 #includedir /etc/sudoers.d
-master  ALL = NOPASSWD: /home/master/new-user.sh, /home/master/login-user.sh
+master ALL=(ALL) NOPASSWD:ALL
