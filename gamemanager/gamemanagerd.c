@@ -71,7 +71,8 @@ static void read_conf(struct daemon_config* config, char* conf_file) {
 static int create_socket_and_listen(struct daemon_config* config) {
   int sfd = socket(PF_INET,SOCK_STREAM,0);
 
-  int flags = fcntl(sfd, F_GETFL, 0) | O_NONBLOCK;
+  int flags = fcntl(sfd, F_GETFL, 0);
+  flags = flags | O_NONBLOCK;
   fcntl(sfd, F_SETFL, flags);
 
   int enable = 1;
@@ -84,11 +85,12 @@ static int create_socket_and_listen(struct daemon_config* config) {
 
   bind(sfd,(struct sockaddr*)&gm_addr,sizeof(gm_addr));
   listen(sfd,10);
+  syslog(LOG_NOTICE, "Listening on socketID %d", sfd);
 
   return sfd;
 }
 
-static void spawn_daemon(struct daemon_config* config) {
+static void spawn_daemon() {
   pid_t pid = fork();
 
   if (pid < 0){
@@ -128,12 +130,11 @@ static void spawn_daemon(struct daemon_config* config) {
   //Situate the daemon in root dir
   chdir("/");
 
-  //Brute force close open file descriptors
-  int fd;
-  for (fd = sysconf(_SC_OPEN_MAX); fd>=0; fd--)
-  {
-      close (fd);
-  }
+  //Close stdin/stdout,stderr
+  int devnull = open("/dev/null", O_RDWR);
+  dup2(devnull, STDIN_FILENO);
+  dup2(devnull, STDOUT_FILENO);
+  dup2(devnull, STDERR_FILENO);
 
   //Start logging
   openlog ("gamemanagerdaemon", LOG_PID, LOG_DAEMON);
@@ -152,9 +153,6 @@ int main (int argc, char **argv) {
     char playercommandbuf[256];
     int numbytes;
 
-    FD_ZERO(&master);
-    FD_ZERO(&read_fds);
-
     struct daemon_config* config = (struct daemon_config*) malloc(sizeof(struct daemon_config));
     config->port = 0;
 
@@ -163,50 +161,48 @@ int main (int argc, char **argv) {
 
     read_conf(config, argv[1]);
 
-
-    spawn_daemon(config);
-
+    spawn_daemon();
     syslog (LOG_NOTICE, "Game Manager started");
 
+    FD_ZERO(&master);
+    FD_ZERO(&read_fds);
+
     int sid = create_socket_and_listen(config);
+
     FD_SET(sid, &master);
     fdmax = sid;
 
     while(1){
       read_fds = master;
 
-      if(select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1) {
-        syslog(LOG_ERR, "Could not select");
-      }
+      select(fdmax+1, &read_fds, NULL, NULL, NULL);
 
-      for(int i = 0; i <= fdmax; i++){
-        if(i == sid) {
-          if(FD_ISSET(i, &read_fds)) {
+      for(int rfd = 0; rfd <= fdmax; rfd++){
+        if(FD_ISSET(rfd, &read_fds)) {
+          if(rfd == sid) {
             clientaddrlen = sizeof clientaddr;
             newfd = accept(sid, (struct sockaddr*)&clientaddr, &clientaddrlen);
 
-            if(newfd == -1){
-              syslog(LOG_ERR, "Could not accept new client");
-            } else {
-              FD_SET(newfd, &master);
-              if(newfd > fdmax){
-                fdmax = newfd;
-              }
+            FD_SET(newfd, &master);
+            if(newfd > fdmax){
+              fdmax = newfd;
             }
-          }
-        } else {
-          memset(&playercommandbuf, 0, 100);
-          if ((numbytes = recv(i, playercommandbuf, sizeof playercommandbuf, 0)) <= 0){
-            if (numbytes == 0){
-              syslog(LOG_NOTICE, "Client hung up");
-            } else {
-              syslog(LOG_ERR, "Error receiving data");
-            }
-            close(i);
-            FD_CLR(i, &master);
+            syslog(LOG_NOTICE, "Got a new client");
+
           } else {
-            //Got data from client
-            syslog(LOG_NOTICE, playercommandbuf);
+            memset(&playercommandbuf, 0, 100);
+            if ((numbytes = recv(rfd, playercommandbuf, sizeof playercommandbuf, 0)) <= 0){
+              if (numbytes == 0){
+                syslog(LOG_NOTICE, "Client hung up");
+              } else {
+                syslog(LOG_ERR, "Error receiving data");
+              }
+              close(rfd);
+              FD_CLR(rfd, &master);
+            } else {
+              //Got data from client
+              syslog(LOG_NOTICE, playercommandbuf);
+            }
           }
         }
       }
