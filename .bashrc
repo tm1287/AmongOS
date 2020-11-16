@@ -124,18 +124,17 @@ if [[ -n $SSH_CONNECTION ]] ; then
     echo "The current players are ..."
     members players
     printf "\n"
-    OPTION=3
     options=("Create New User" "Login as Existing User" "Quit")
     select opt in "${options[@]}"
     do
 	    case $opt in
             "Create New User")
 		printf "Creating New User...\n"
-		./new-user.sh
+		./AmongOS/new-user.sh
 		break
 		;;
 	    "Login as Existing User")
-		./login-user.sh
+		./AmongOS/login-user.sh
 		break
 		;;
 	    "Quit")
