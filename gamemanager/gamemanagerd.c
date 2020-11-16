@@ -11,6 +11,12 @@
 #include <sys/stat.h>
 #include <syslog.h>
 #include <string.h>
+#include <errno.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <dirent.h>
 
 #define MAXLINE 100
 #define OPTIONLEN 50
@@ -21,7 +27,68 @@ struct daemon_config {
   char* options[MAXCONFS];
 };
 
-static void spawn_daemon() {
+static void read_conf(struct daemon_config* config, char* conf_file) {
+  //printf("%s\n", conf_file);
+  FILE *fp;
+  char buf[MAXLINE];
+  char option[OPTIONLEN];
+  int val = 0;
+
+  if ((fp=fopen(conf_file, "r")) == NULL) {
+    printf("Failed to read conf, daemon not starting...\n");
+    exit(1);
+  }
+
+
+  ssize_t read;
+  char* line = NULL;
+  size_t len = 0;
+  int option_index = 0;
+  while((read = getline(&line, &len, fp)) != -1){
+    strcpy(buf, line);
+
+    sscanf(buf, "%s %d", option, &val);
+
+    while(config->options[option_index]!=NULL) {
+      if(strcmp(config->options[option_index], option) == 0){
+        if(strcmp(option, "PORT") == 0){
+          config->port = val;
+        }
+        break;
+      }
+      option_index++;
+    }
+
+    memset(buf, 0, MAXLINE);
+    memset(option, 0, OPTIONLEN);
+    val = 0;
+  }
+  fclose(fp);
+  free(line);
+
+}
+
+static int create_socket_and_listen(struct daemon_config* config) {
+  int sfd = socket(PF_INET,SOCK_STREAM,0);
+
+  int flags = fcntl(sfd, F_GETFL, 0) | O_NONBLOCK;
+  fcntl(sfd, F_SETFL, flags);
+
+  int enable = 1;
+  setsockopt(sfd, SOL_SOCKET,SO_REUSEADDR, &enable, sizeof(int));
+
+  struct sockaddr_in gm_addr;
+  gm_addr.sin_family = AF_INET;
+  gm_addr.sin_port   = htons(config->port);
+  gm_addr.sin_addr.s_addr = INADDR_ANY;
+
+  bind(sfd,(struct sockaddr*)&gm_addr,sizeof(gm_addr));
+  listen(sfd,10);
+
+  return sfd;
+}
+
+static void spawn_daemon(struct daemon_config* config) {
   pid_t pid = fork();
 
   if (pid < 0){
@@ -72,48 +139,22 @@ static void spawn_daemon() {
   openlog ("gamemanagerdaemon", LOG_PID, LOG_DAEMON);
 }
 
-static void read_conf(struct daemon_config* config, char* conf_file) {
-  //printf("%s\n", conf_file);
-  FILE *fp;
-  char buf[MAXLINE];
-  char option[OPTIONLEN];
-  int val = 0;
-
-  if ((fp=fopen(conf_file, "r")) == NULL) {
-    printf("Failed to read conf, daemon not starting...\n");
-    exit(1);
-  }
-
-
-  ssize_t read;
-  char* line = NULL;
-  size_t len = 0;
-  int option_index = 0;
-  while((read = getline(&line, &len, fp)) != -1){
-    strcpy(buf, line);
-
-    sscanf(buf, "%s %d", option, &val);
-
-    while(config->options[option_index]!=NULL) {
-      if(strcmp(config->options[option_index], option) == 0){
-        if(strcmp(option, "PORT") == 0){
-          config->port = val;
-        }
-        break;
-      }
-      option_index++;
-    }
-
-    memset(buf, 0, MAXLINE);
-    memset(option, 0, OPTIONLEN);
-    val = 0;
-  }
-  fclose(fp);
-  free(line);
-
-}
-
 int main (int argc, char **argv) {
+
+    fd_set master;
+    fd_set read_fds;
+    int fdmax;
+
+    int newfd;
+    struct sockaddr_storage clientaddr;
+    socklen_t clientaddrlen;
+
+    char playercommandbuf[256];
+    int numbytes;
+
+    FD_ZERO(&master);
+    FD_ZERO(&read_fds);
+
     struct daemon_config* config = (struct daemon_config*) malloc(sizeof(struct daemon_config));
     config->port = 0;
 
@@ -122,18 +163,59 @@ int main (int argc, char **argv) {
 
     read_conf(config, argv[1]);
 
-    /*
-    spawn_daemon();
+
+    spawn_daemon(config);
 
     syslog (LOG_NOTICE, "Game Manager started");
 
+    int sid = create_socket_and_listen(config);
+    FD_SET(sid, &master);
+    fdmax = sid;
+
     while(1){
-      sleep(1);
+      read_fds = master;
+
+      if(select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1) {
+        syslog(LOG_ERR, "Could not select");
+      }
+
+      for(int i = 0; i <= fdmax; i++){
+        if(i == sid) {
+          if(FD_ISSET(i, &read_fds)) {
+            clientaddrlen = sizeof clientaddr;
+            newfd = accept(sid, (struct sockaddr*)&clientaddr, &clientaddrlen);
+
+            if(newfd == -1){
+              syslog(LOG_ERR, "Could not accept new client");
+            } else {
+              FD_SET(newfd, &master);
+              if(newfd > fdmax){
+                fdmax = newfd;
+              }
+            }
+          }
+        } else {
+          memset(&playercommandbuf, 0, 100);
+          if ((numbytes = recv(i, playercommandbuf, sizeof playercommandbuf, 0)) <= 0){
+            if (numbytes == 0){
+              syslog(LOG_NOTICE, "Client hung up");
+            } else {
+              syslog(LOG_ERR, "Error receiving data");
+            }
+            close(i);
+            FD_CLR(i, &master);
+          } else {
+            //Got data from client
+            syslog(LOG_NOTICE, playercommandbuf);
+          }
+        }
+      }
+
     }
 
     syslog (LOG_NOTICE, "Game Manager stopped");
     closelog();
-    */
+
     free(config);
     return 0;
 }
