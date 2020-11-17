@@ -213,7 +213,7 @@ int main (int argc, char **argv) {
 
               syslog(LOG_NOTICE, "Got command from user %s", c.user);
               memset(&p, 0, sizeof(struct payload));
-              p.task_completion = htonl(75);
+              p.task_completion = htonl(100);
               //Send to all players.
               for(int j = 0; j <= fdmax; j++) {
                 if (FD_ISSET(j, &master)) {

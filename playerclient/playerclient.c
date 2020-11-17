@@ -91,6 +91,12 @@ int main(int argc, char* argv []) {
 
     refresh();
 
+    start_color();
+    init_pair(1, COLOR_BLACK, COLOR_WHITE);
+    attron(COLOR_PAIR(1));
+    int i = 0;
+    int given_perc = 50;
+    int local_perc = 0;
     while(1) {
 
       fd_set readSet;
@@ -105,21 +111,25 @@ int main(int argc, char* argv []) {
       if(FD_ISSET(sid, &readSet)) {
          if(recv(sid, &p, sizeof(p), 0) != -1) {
            p.task_completion = ntohl(p.task_completion);
-           start_color();			/* Start color 			*/
+           start_color();
          	 init_pair(1, COLOR_RED, COLOR_WHITE);
-           attron(COLOR_PAIR(1));
-
-           for(int i = task_percentage; i < task_percentage+(p.task_completion-task_percentage);i++){
-             mvaddch(3, strlen(taskbar_start)+i, ' ');
+           if(p.task_completion > task_percentage) {
+             attron(COLOR_PAIR(1));
+             for(int i = task_percentage; i < task_percentage+(p.task_completion-task_percentage);i++){
+               mvprintw(3, strlen(taskbar_start)+i, " ");
+             }
+             attroff(COLOR_PAIR(1));
+           } else {
+             for(int i = task_percentage; i >= task_percentage - (task_percentage-p.task_completion);i--){
+               mvprintw(3, strlen(taskbar_start)+i, "-");
+             }
            }
+
            refresh();
            task_percentage = p.task_completion;
          }
 
        }
-
-      //waddstr(taskbar, "=");
-      //sleep(2);
 
     }
     endwin();
