@@ -27,6 +27,18 @@ struct daemon_config {
   char* options[MAXCONFS];
 };
 
+struct payload {
+  int task_completion;
+
+};
+
+struct player_command {
+  int type;
+  char user[50];
+  char data[100];
+};
+
+
 static void read_conf(struct daemon_config* config, char* conf_file) {
   //printf("%s\n", conf_file);
   FILE *fp;
@@ -149,8 +161,9 @@ int main (int argc, char **argv) {
     struct sockaddr_storage clientaddr;
     socklen_t clientaddrlen;
 
-    char playercommandbuf[256];
     int numbytes;
+    struct player_command c;
+    struct payload p;
 
     struct daemon_config* config = (struct daemon_config*) malloc(sizeof(struct daemon_config));
     config->port = 0;
@@ -189,18 +202,26 @@ int main (int argc, char **argv) {
             syslog(LOG_NOTICE, "Got a new client");
 
           } else {
-            memset(&playercommandbuf, 0, 100);
-            if ((numbytes = recv(rfd, playercommandbuf, sizeof playercommandbuf, 0)) <= 0){
-              if (numbytes == 0){
-                syslog(LOG_NOTICE, "Client hung up");
-              } else {
-                syslog(LOG_ERR, "Error receiving data");
-              }
+            memset(&c, 0, sizeof(struct player_command));
+            if ((numbytes = recv(rfd, &c, sizeof(struct player_command), 0)) <= 0){
+              syslog(LOG_NOTICE, "Client hung up");
               close(rfd);
               FD_CLR(rfd, &master);
             } else {
-              //Got data from client
-              syslog(LOG_NOTICE, playercommandbuf);
+              c.type = ntohl(c.type);
+              //Do different tasks depending on type.
+
+              syslog(LOG_NOTICE, "Got command from user %s", c.user);
+              memset(&p, 0, sizeof(struct payload));
+              p.task_completion = htonl(75);
+              //Send to all players.
+              for(int j = 0; j <= fdmax; j++) {
+                if (FD_ISSET(j, &master)) {
+                  if (j != sid) {
+                    send(j, &p, sizeof(struct payload), 0);
+                  }
+                }
+              }
             }
           }
         }
