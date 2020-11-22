@@ -90,10 +90,10 @@ int main(int argc, char* argv []) {
     attroff(A_BOLD);
     mvprintw(1, (COLS/2)-(strlen(crewmate_comm)/2), crewmate_comm);
     mvprintw(3, 0, taskbar_start);
-    for(int i = strlen(taskbar_start); i < strlen(taskbar_start)+100; i++){
+    for(int i = strlen(taskbar_start); i < strlen(taskbar_start)+50; i++){
       mvaddch(3, i, '-');
     }
-    mvprintw(3, strlen(taskbar_start)+100, "|");
+    mvprintw(3, strlen(taskbar_start)+50, "|");
 
 
     refresh();
@@ -122,12 +122,12 @@ int main(int argc, char* argv []) {
          	 init_pair(1, COLOR_RED, COLOR_WHITE);
            if(p.task_completion > task_percentage) {
              attron(COLOR_PAIR(1));
-             for(int i = task_percentage; i < task_percentage+(p.task_completion-task_percentage);i++){
+             for(int i = task_percentage; i < task_percentage+((p.task_completion-task_percentage)/2);i++){
                mvprintw(3, strlen(taskbar_start)+i, " ");
              }
              attroff(COLOR_PAIR(1));
            } else {
-             for(int i = task_percentage; i >= task_percentage - (task_percentage-p.task_completion);i--){
+             for(int i = task_percentage; i >= task_percentage - ((task_percentage-p.task_completion)/2);i--){
                mvprintw(3, strlen(taskbar_start)+i, "-");
              }
            }
