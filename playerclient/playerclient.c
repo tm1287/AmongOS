@@ -13,7 +13,6 @@
 #include <ncurses.h>
 
 
-
 #define C_REGISTER 0
 #define C_START 1
 #define C_MEETING 2
@@ -47,6 +46,12 @@ void send_all(int socket, char* buffer, size_t length) {
 }
 
 int main(int argc, char* argv []) {
+  if(argc < 2) {
+    perror("Supply a username");
+    exit(1);
+  }
+
+
   int sid = socket(PF_INET, SOCK_STREAM, 0);
   struct sockaddr_in srv;
   struct hostent *server = gethostbyname("localhost");
@@ -65,6 +70,8 @@ int main(int argc, char* argv []) {
   reg_comm.type = htonl(C_REGISTER);
   strcpy(reg_comm.user, argv[1]);
   strcpy(reg_comm.data, "");
+
+
 
   int ch;
   if(send(sid, &reg_comm, sizeof(reg_comm), 0) != -1) {
@@ -135,8 +142,6 @@ int main(int argc, char* argv []) {
     endwin();
 
   }
-
-
 
   return 0;
 }
