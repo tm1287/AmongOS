@@ -1,0 +1,28 @@
+# SSH Registration/Login handling
+
+if [[ -n $SSH_CONNECTION ]] ; then
+    printf "\nWelcome to AmongOS\n\n"
+    
+    echo "The current players are ..."
+    members players
+    printf "\n"
+    options=("Create New User" "Login as Existing User" "Quit")
+    select opt in "${options[@]}"
+    do
+	    case $opt in
+            "Create New User")
+		printf "Creating New User...\n"
+		./AmongOS/new-user.sh
+		break
+		;;
+	    "Login as Existing User")
+		./AmongOS/login-user.sh
+		break
+		;;
+	    "Quit")
+		break
+		;;
+	    *) echo "invalid option $REPLY" ;;
+	    esac
+    done
+fi
