@@ -1,3 +1,5 @@
+# Still under development
+
 # Common commands
 docker build -t amongos .
 
